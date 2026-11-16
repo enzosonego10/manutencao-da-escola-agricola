@@ -192,6 +192,9 @@ try {
     if ($action === 'novo') {
         $local = (int) ($data['l'] ?? 0);
         if (!exists($db, 'locais', $local)) fail('Local inválido.');
+        $children = $db->prepare('SELECT 1 FROM locais WHERE parent_id = ? LIMIT 1');
+        $children->execute([$local]);
+        if ($children->fetchColumn()) fail('Escolha o setor ou subsetor mais específico disponível.');
         $titulo = required($data, 't', 80);
         $descricao = required($data, 'd', 2000);
         $user = $_SESSION['user'];

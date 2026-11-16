@@ -57,6 +57,8 @@ assert status == 200 and dashboard["user"]["role"] == "admin"
 assert ticket_id in [x["id"] for x in dashboard["db"]["c"]]
 status, hierarchy = call(manager, "local", csrf=initial["csrf"], nome="Setor teste", tipo="Alojamento", parent=1)
 assert status == 200 and any(x["parentId"] == 1 for x in hierarchy["db"]["l"])
+status, parent_location = call(student, "novo", csrf=csrf, l=1, cat="Outros", setor="", subsetor="", pat="", t="Local pai", d="Teste de local hierárquico")
+assert status == 400 and parent_location["error"]
 status, adjusted = call(manager, "prioridade", csrf=initial["csrf"], id=ticket_id, p=4)
 assert status == 200 and next(x for x in adjusted["db"]["c"] if x["id"] == ticket_id)["prio"] == 4
 status, invalid = call(manager, "sit", csrf=initial["csrf"], id=ticket_id, st="c", resp="Equipe", dc="", serv="")
