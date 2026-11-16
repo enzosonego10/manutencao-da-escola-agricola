@@ -13,7 +13,7 @@ const icons=()=>window.lucide&&lucide.createIcons();
 try{document.documentElement.dataset.theme=localStorage.getItem('etec-theme')==='dark'?'dark':'light'}catch(_){document.documentElement.dataset.theme='light'}
 function themeButton(){const dark=document.documentElement.dataset.theme==='dark',b=$('#theme-toggle');b.setAttribute('aria-label',dark?'Ativar modo claro':'Ativar modo escuro');b.innerHTML=`<i aria-hidden="true" data-lucide="${dark?'sun':'moon'}"></i>`}
 
-let db={l:[],e:[],c:[],a:[],k:[],i:[]},user=null,csrf='',lastInviteUrl='';
+let db={l:[],c:[],a:[],k:[],i:[]},user=null,csrf='',lastInviteUrl='';
 const admin=()=>user?.role==='admin';
 const api=async(action,body={})=>{
  const response=await fetch('api.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,csrf,...body})});
@@ -51,31 +51,34 @@ function vPainel(){
 
 let F={s:'',p:'',l:''};
 function rows(){
- const r=db.c.filter(c=>(!F.s||c.st===F.s)&&(!F.p||c.prio==F.p)&&(!F.l||c.localId==F.l)).sort((a,b)=>b.id-a.id);
- return r.length?r.map(c=>`<tr><td data-l="Nº">#${c.id}</td><td data-l="Chamado"><a href="#/chamado/${c.id}"><b>${esc(c.titulo)}</b></a><br><span class="mu">${loc(c)}</span></td><td data-l="Prioridade">${bp(c.prio)}</td><td data-l="Situação">${bs(c.st)}</td><td data-l="Responsável">${esc(c.resp)||'—'}</td><td data-l="Aberto em">${dt(c.aberto)}</td></tr>`).join(''):'<tr><td colspan="6">Nenhum chamado com esses filtros.</td></tr>';
+ const r=db.c.filter(c=>(!F.s||c.st===F.s)&&(!F.p||c.prio==F.p)&&(!F.l||c.localId==F.l)&&(!F.cat||c.cat===F.cat)&&(!F.min||tot(c.id)>=Number(F.min))&&(!F.max||tot(c.id)<=Number(F.max))&&(!F.q||[c.titulo,c.desc,c.cat,c.setor,c.subsetor,loc(c)].join(' ').toLocaleLowerCase('pt-BR').includes(F.q.toLocaleLowerCase('pt-BR')))).sort((a,b)=>F.order==='asc'?a.prio-b.prio||b.id-a.id:F.order==='desc'?b.prio-a.prio||b.id-a.id:b.id-a.id);
+ return r.length?r.map(c=>`<tr><td data-l="Nº">#${c.id}</td><td data-l="Chamado"><a href="#/chamado/${c.id}"><b>${esc(c.titulo)}</b></a><br><span class="mu">${loc(c)} · ${esc(c.cat)}${c.setor?' · '+esc(c.setor):''}${c.subsetor?' · '+esc(c.subsetor):''}</span></td><td data-l="Prioridade">${bp(c.prio)}</td><td data-l="Situação">${bs(c.st)}</td><td data-l="Responsável">${esc(c.resp)||'—'}</td><td data-l="Aberto em">${dt(c.aberto)}</td></tr>`).join(''):'<tr><td colspan="6">Nenhum chamado com esses filtros.</td></tr>';
 }
 function vLista(){
- return `<div class="page-intro"><span class="eyebrow">${admin()?'ADMINISTRAÇÃO':'ÁREA DO ALUNO'}</span><h1>${admin()?'Chamados':'Meus chamados'}</h1><p>${admin()?'Filtre e acompanhe todos os pedidos de manutenção.':'Veja a situação e o histórico dos pedidos feitos na sua conta.'}</p></div><div class="filter-panel row"><div><label for="fs">Situação</label><select id="fs" data-flt="s">${opts(S,F.s,'Todas')}</select></div><div><label for="fp">Prioridade</label><select id="fp" data-flt="p">${opts(P,F.p,'Todas')}</select></div><div><label for="fl">Local</label><select id="fl" data-flt="l">${opts(lo(),F.l,'Todos')}</select></div></div>
+ return `<div class="page-intro"><span class="eyebrow">${admin()?'ADMINISTRAÇÃO':'ÁREA DO ALUNO'}</span><h1>${admin()?'Chamados':'Meus chamados'}</h1><p>${admin()?'Filtre e acompanhe todos os pedidos de manutenção.':'Veja a situação e o histórico dos pedidos feitos na sua conta.'}</p></div><div class="filter-panel row"><div><label for="fq">Pesquisar</label><input id="fq" data-flt="q" value="${esc(F.q||'')}" placeholder="Descrição, local, categoria..."></div><div><label for="fo">Ordenar prioridade</label><select id="fo" data-flt="order">${opts({desc:'Maior para menor',asc:'Menor para maior'},F.order||'','Padrão')}</select></div><div><label for="fs">Situação</label><select id="fs" data-flt="s">${opts(S,F.s,'Todas')}</select></div><div><label for="fp">Prioridade</label><select id="fp" data-flt="p">${opts(P,F.p,'Todas')}</select></div><div><label for="fl">Local</label><select id="fl" data-flt="l">${opts(lo(),F.l,'Todos')}</select></div><div><label for="fc">Categoria</label><select id="fc" data-flt="cat">${opts({Elétrica:'Elétrica',Hidráulica:'Hidráulica',Estrutural:'Estrutural',Limpeza:'Limpeza',Equipamentos:'Equipamentos',Outros:'Outros'},F.cat,'Todas')}</select></div>${admin()?`<div><label for="fmin">Custo mínimo</label><input id="fmin" type="number" min="0" step="0.01" data-flt="min" value="${esc(F.min||'')}"></div><div><label for="fmax">Custo máximo</label><input id="fmax" type="number" min="0" step="0.01" data-flt="max" value="${esc(F.max||'')}"></div>`:''}</div>
  <div class="table-shell"><table class="rt"><thead><tr><th>Nº</th><th>Chamado</th><th>Prioridade</th><th>Situação</th><th>Responsável</th><th>Aberto em</th></tr></thead><tbody id="rows">${rows()}</tbody></table></div>`;
 }
 
 function vNovo(){
  return `<div class="page-intro"><span class="eyebrow">PEDIDO DE MANUTENÇÃO</span><h1>Novo chamado</h1><p>Descreva o problema e escolha onde ele acontece.</p></div><form class="card" data-f="novo">
- <label for="l">Local</label><select id="l" name="l" required>${opts(lo(),'','Escolha o local')}</select>
- <label for="e">Equipamento (opcional)</label><select id="e" name="e"><option value="">Não se aplica</option></select>
+ <label for="l1">Apartamento ou bloco</label><select id="l1" required>${opts(Object.fromEntries(db.l.filter(x=>!x.parentId).map(x=>[x.id,x.nome])),'','Escolha')}</select><label for="l2">Cor ou setor</label><select id="l2" required disabled><option value="">Escolha primeiro</option></select><label for="l">Quarto ou apartamento</label><select id="l" name="l" required disabled><option value="">Escolha primeiro</option></select>
+ <label for="cat">Categoria</label><select id="cat" name="cat">${opts({Elétrica:'Elétrica',Hidráulica:'Hidráulica',Estrutural:'Estrutural',Limpeza:'Limpeza',Equipamentos:'Equipamentos',Outros:'Outros'},'Outros')}</select>
+ <label for="setor">Setor</label><input id="setor" name="setor" placeholder="Ex.: Alojamento feminino">
+ <label for="subsetor">Subsetor / quarto</label><input id="subsetor" name="subsetor" placeholder="Ex.: Laranja, quarto 3">
+ <label for="pat">Código de patrimônio (opcional)</label><input id="pat" name="pat" maxlength="80">
  <label for="t">O que precisa de conserto</label><input id="t" name="t" required maxlength="80">
  <label for="d">Descrição do problema</label><textarea id="d" name="d" required></textarea>
- <div class="row"><div><label for="p">Prioridade</label><select id="p" name="p">${opts(P,2)}</select></div><div><span class="field-label">Solicitante</span><p class="readonly">${esc(user.name)}</p></div></div><p class="err" role="alert"></p>
+ <div class="row"><div><span class="field-label">Prioridade automática</span><p class="readonly">Definida pela descrição; ADM pode ajustar depois.</p></div><div><span class="field-label">Solicitante</span><p class="readonly">${esc(user.name)}</p></div></div><p class="err" role="alert"></p>
  <button class="btn"><i aria-hidden="true" data-lucide="plus"></i>Abrir chamado</button></form>`;
 }
 
 function vChamado(id){
  const c=by(db.c,id);
  if(!c)return '<h1>Chamado não encontrado</h1><p><a href="#/chamados">Voltar para a lista</a></p>';
- const e=by(db.e,c.equipId),an=db.a.filter(a=>a.chId===id).sort((x,y)=>y.id-x.id),cu=db.k.filter(k=>k.chId===id),fechado=c.st==='c'||c.st==='x';
+ const an=db.a.filter(a=>a.chId===id).sort((x,y)=>y.id-x.id),cu=db.k.filter(k=>k.chId===id),fechado=c.st==='c'||c.st==='x';
  return `<div class="ticket-head"><a class="back-link" href="#/chamados"><i aria-hidden="true" data-lucide="arrow-left"></i>Voltar para os chamados</a><span class="eyebrow">CHAMADO / ${String(id).padStart(3,'0')}</span><h1>${esc(c.titulo)}</h1><p>${bs(c.st)} ${bp(c.prio)}</p></div>
- <section class="card"><div class="row">${it('Local',loc(c))}${it('Equipamento',e?esc(e.nome):'—')}${it('Pedido por',esc(c.sol))}${it('Responsável',esc(c.resp)||'Sem responsável')}${it('Aberto em',dt(c.aberto))}${c.st==='c'?it('Concluído em',dt(c.concl)):''}</div>
- <p>${esc(c.desc)}</p>${c.serv?`<p><b>Serviço realizado:</b> ${esc(c.serv)}</p>`:''}</section>
+ <section class="card"><div class="row">${it('Local',loc(c))}${it('Categoria',esc(c.cat))}${c.pat?it('Patrimônio',esc(c.pat)):''}${it('Setor / subsetor',esc([c.setor,c.subsetor].filter(Boolean).join(' / ')||'—'))}${it('Pedido por',esc(c.sol))}${it('Responsável',esc(c.resp)||'Sem responsável')}${it('Aberto em',dt(c.aberto))}${c.st==='c'?it('Concluído em',dt(c.concl)):''}</div>
+ <p>${esc(c.desc)}</p>${admin()?`<label for="prio-${id}">Prioridade</label><select id="prio-${id}" data-prio="${id}">${opts(P,c.prio)}</select>`:''}${c.serv?`<p><b>Serviço realizado:</b> ${esc(c.serv)}</p>`:''}</section>
  ${admin()?`<section class="card"><h2>Atualizar situação</h2>
  ${fechado?`<p class="mu">Este chamado está ${c.st==='c'?'concluído':'cancelado'} e não pode mais ser alterado.</p>`:`<form data-f="sit" data-id="${id}" novalidate>
  <div class="row"><div><label for="st">Nova situação</label><select id="st" name="st">${opts(S,c.st)}</select></div>
@@ -94,21 +97,18 @@ function vChamado(id){
 }
 
 function vLocais(){
- return `<div class="page-intro"><span class="eyebrow">ADMINISTRAÇÃO / CADASTROS</span><h1>Locais e equipamentos</h1><p>Organize os espaços da escola e os equipamentos vinculados a cada local.</p></div>
- <div class="location-grid">${db.l.map(l=>{const eq=db.e.filter(e=>e.localId===l.id),n=db.c.filter(c=>c.localId===l.id&&open(c)).length;return `<section class="card location-card"><span class="eyebrow">${esc(l.tipo)}</span><h2>${esc(l.nome)}</h2><p class="open-count">${n} chamado${n===1?'':'s'} em aberto</p>${eq.length?`<ul class="equipment-list">${eq.map(e=>`<li><i aria-hidden="true" data-lucide="wrench"></i><span>${esc(e.nome)}<small>${esc(e.pat)||'Sem patrimônio'}</small></span></li>`).join('')}</ul>`:'<p class="mu">Nenhum equipamento cadastrado.</p>'}</section>`}).join('')}</div>
- <h2 class="section-title">Novos cadastros</h2><div class="row"><form class="card" data-f="local"><span class="eyebrow">ESPAÇO DA ESCOLA</span><h2>Cadastrar local</h2><label for="ln">Nome</label><input id="ln" name="nome" required><label for="lt">Tipo</label><select id="lt" name="tipo">${opts(arr(TL))}</select><button class="btn"><i aria-hidden="true" data-lucide="plus"></i>Cadastrar local</button></form>
- <form class="card" data-f="equip"><span class="eyebrow">PATRIMÔNIO E EQUIPAMENTOS</span><h2>Cadastrar equipamento</h2><label for="el">Local</label><select id="el" name="l" required>${opts(lo())}</select><label for="en">Nome</label><input id="en" name="nome" required><label for="ep">Código de patrimônio</label><input id="ep" name="pat"><button class="btn"><i aria-hidden="true" data-lucide="plus"></i>Cadastrar equipamento</button></form></div>`;
+ const roots=db.l.filter(x=>!x.parentId);
+ return `<div class="page-intro"><span class="eyebrow">ADMINISTRAÇÃO / CADASTROS</span><h1>Locais e hierarquia</h1><p>Cadastre blocos, setores e quartos em níveis.</p></div><div class="location-grid">${roots.map(a=>`<section class="card location-card"><h2>${esc(a.nome)}</h2><ul>${db.l.filter(b=>b.parentId==a.id).map(b=>`<li>${esc(b.nome)}<ul>${db.l.filter(c=>c.parentId==b.id).map(c=>`<li>${esc(c.nome)}</li>`).join('')}</ul></li>`).join('')}</ul></section>`).join('')}</div><form class="card" data-f="local"><h2>Cadastrar nível</h2><label for="ln">Nome</label><input id="ln" name="nome" required><label for="lt">Tipo</label><select id="lt" name="tipo">${opts(arr(TL))}</select><label for="lp">Local superior (vazio para bloco)</label><select id="lp" name="parent"><option value="">Raiz</option>${opts(Object.fromEntries(db.l.map(l=>[l.id,l.nome+' — '+l.tipo])),'')}</select><button class="btn">Cadastrar local</button></form>`;
 }
 
-let R={de:'',ate:''};
 function relBody(){
- const cs=db.c.filter(c=>(!R.de||c.aberto>=R.de)&&(!R.ate||c.aberto<=R.ate));
+ const cs=db.c.filter(c=>(!R.de||c.aberto>=R.de)&&(!R.ate||c.aberto<=R.ate)&&(!R.st||(R.st==='abertos'?open(c):c.st==='c')));
  const lin=db.l.map(l=>{const x=cs.filter(c=>c.localId===l.id);return{n:l.nome,ab:x.filter(open).length,co:x.filter(c=>c.st==='c').length,cu:x.reduce((s,c)=>s+tot(c.id),0)}}).filter(r=>r.ab+r.co+r.cu);
  const mx=Math.max(1,...lin.map(r=>r.cu)),T=k=>lin.reduce((s,r)=>s+r[k],0);
  return lin.length?`<table class="rt"><thead><tr><th>Local</th><th class="n">Abertos</th><th class="n">Concluídos</th><th class="n">Custo</th><th class="bc"></th></tr></thead><tbody>${lin.map(r=>`<tr><td data-l="Local">${esc(r.n)}</td><td class="n" data-l="Abertos">${r.ab}</td><td class="n" data-l="Concluídos">${r.co}</td><td class="n" data-l="Custo">${brl(r.cu)}</td><td class="bc" aria-hidden="true"><div class="bar"><i style="width:${r.cu/mx*100}%"></i></div></td></tr>`).join('')}</tbody><tfoot><tr><th>Total</th><th class="n" data-l="Abertos">${T('ab')}</th><th class="n" data-l="Concluídos">${T('co')}</th><th class="n" data-l="Custo">${brl(T('cu'))}</th><th class="bc"></th></tr></tfoot></table>`:'<p>Nenhum chamado no período.</p>';
 }
 function vRel(){
- return `<div class="page-intro"><span class="eyebrow">ADMINISTRAÇÃO / CONSULTA</span><h1>Relatório por local</h1><p>Chamados abertos, concluídos e custos, filtrados pela data de abertura.</p></div><div class="filter-panel row"><div><label for="de">De</label><input id="de" type="date" data-rel="de" value="${R.de}"></div><div><label for="ate">Até</label><input id="ate" type="date" data-rel="ate" value="${R.ate}"></div></div><div id="rb" class="table-shell">${relBody()}</div>`;
+ return `<div class="page-intro"><span class="eyebrow">ADMINISTRAÇÃO / CONSULTA</span><h1>Relatório por local</h1><p>Chamados abertos, concluídos e custos, filtrados pela data de abertura.</p></div><div class="filter-panel row"><div><label for="rst">Situação</label><select id="rst" data-rel="st">${opts({abertos:'Abertos',concluidos:'Concluídos'},R.st,'Todas')}</select></div><div><label for="de">De</label><input id="de" type="date" data-rel="de" value="${R.de}"></div><div><label for="ate">Até</label><input id="ate" type="date" data-rel="ate" value="${R.ate}"></div></div><div id="rb" class="table-shell">${relBody()}</div>`;
 }
 
 function inviteDate(s){return new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}
@@ -209,7 +209,9 @@ document.addEventListener('change',e=>{
  const t=e.target;
  if(t.dataset.flt){F[t.dataset.flt]=t.value;$('#rows').innerHTML=rows();icons()}
  else if(t.id==='st')$('#cf').hidden=t.value!=='c';
- else if(t.id==='l'&&t.form&&t.form.dataset.f==='novo')$('#e').innerHTML='<option value="">Não se aplica</option>'+db.e.filter(x=>x.localId==t.value).map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('');
+ else if(t.id==='l1'){const c=db.l.filter(x=>x.parentId==t.value),level2=$('#l2'),leaf=$('#l');level2.innerHTML=opts(Object.fromEntries(c.map(x=>[x.id,x.nome])),'','Escolha o setor');level2.disabled=!c.length;level2.required=!!c.length;leaf.innerHTML=c.length?'<option value="">Escolha o quarto</option>':`<option value="${esc(t.value)}">${esc(by(db.l,t.value)?.nome||'Local selecionado')}</option>`;leaf.disabled=!!c.length;leaf.required=!!c.length;$('#setor').required=!c.length;$('#subsetor').required=!c.length}
+ else if(t.id==='l2'){const c=db.l.filter(x=>x.parentId==t.value),leaf=$('#l');leaf.innerHTML=c.length?opts(Object.fromEntries(c.map(x=>[x.id,x.nome])),'','Escolha o quarto'):`<option value="${esc(t.value)}">${esc(by(db.l,t.value)?.nome||'Setor selecionado')}</option>`;leaf.disabled=false;leaf.required=!!c.length;$('#subsetor').required=!c.length}
+ else if(t.dataset.prio){ api('prioridade',{id:+t.dataset.prio,p:+t.value}).then(()=>load().then(()=>route())).catch(err=>alert(err.message)); }
  else if(t.dataset.rel){R[t.dataset.rel]=t.value;$('#rb').innerHTML=relBody()}
 });
 addEventListener('hashchange',()=>route(true));

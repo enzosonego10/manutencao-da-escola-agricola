@@ -37,11 +37,15 @@ status, forbidden = call(student, "local", csrf=csrf, nome="Proibido", tipo="Ins
 assert status == 403 and forbidden["error"]
 status, forbidden = call(student, "invite", csrf=csrf, email=f"admin-{uuid4().hex}@example.test")
 assert status == 403 and forbidden["error"]
-status, ticket = call(student, "novo", csrf=csrf, l=1, e=1, t="Teste do aluno", d="Descrição do teste", p=2)
+status, ticket = call(student, "novo", csrf=csrf, l=1, cat="Outros", setor="Bloco", subsetor="Quarto 2", pat="", t="Teste do aluno", d="Descrição do teste", p=4)
 assert status == 200 and ticket["id"] > 0
+assert "prio" not in ticket
 ticket_id = ticket["id"]
 status, own = call(student)
 assert status == 200 and [x["id"] for x in own["db"]["c"]] == [ticket_id]
+assert own["db"]["c"][0]["prio"] == 1  # prioridade enviada pelo aluno é ignorada
+status, forbidden = call(student, "prioridade", csrf=csrf, id=ticket_id, p=4)
+assert status == 403 and forbidden["error"]
 status, forbidden = call(student, "sit", csrf=csrf, id=ticket_id, st="c", dc="2026-10-24", serv="Teste")
 assert status == 403 and forbidden["error"]
 
@@ -51,6 +55,10 @@ assert status == 200
 status, dashboard = call(manager, "login", csrf=initial["csrf"], email=admin_email, password=admin_password)
 assert status == 200 and dashboard["user"]["role"] == "admin"
 assert ticket_id in [x["id"] for x in dashboard["db"]["c"]]
+status, hierarchy = call(manager, "local", csrf=initial["csrf"], nome="Setor teste", tipo="Alojamento", parent=1)
+assert status == 200 and any(x["parentId"] == 1 for x in hierarchy["db"]["l"])
+status, adjusted = call(manager, "prioridade", csrf=initial["csrf"], id=ticket_id, p=4)
+assert status == 200 and next(x for x in adjusted["db"]["c"] if x["id"] == ticket_id)["prio"] == 4
 status, invalid = call(manager, "sit", csrf=initial["csrf"], id=ticket_id, st="c", resp="Equipe", dc="", serv="")
 assert status == 400 and invalid["error"]
 status, updated = call(manager, "sit", csrf=initial["csrf"], id=ticket_id, st="p", resp="Equipe", obs="Em análise")

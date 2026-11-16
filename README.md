@@ -55,3 +55,7 @@ Na área **Administradores**, informe o e-mail institucional e gere um convite. 
 - Os dados da versão anterior em `localStorage` não são importados automaticamente. O novo sistema não os apaga.
 - Fontes, ícones e a ilustração dependem de URLs externas; as funções continuam disponíveis sem eles.
 - Integrantes, turma, contribuições e forma de entrega: **[DADO A CONFIRMAR]**.
+
+### Atualização para locais hierárquicos e categorias
+
+Em uma instalação existente, faça backup do banco e execute `migration_melhorias.sql` uma única vez antes de publicar os arquivos novos. A migração mantém chamados, históricos e custos, copia o patrimônio dos equipamentos vinculados aos chamados e então remove o catálogo de equipamentos. O cadastro legado de locais permanece como nível raiz; a administração deve cadastrar os setores e quartos correspondentes em `Locais` para liberar a seleção em cascata.

@@ -48,6 +48,15 @@ function admin(): void
     if (($_SESSION['user']['role'] ?? '') !== 'admin') fail('Acesso restrito à administração.', 403);
 }
 
+function automaticPriority(string $description): int
+{
+    $text = mb_strtolower($description);
+    if (preg_match('/inc[eê]ndio|choque|curto|vazamento de g[aá]s|risco de vida|desabamento/', $text)) return 4;
+    if (preg_match('/urgente|alagamento|sem [aá]gua|sem energia|parou|quebrado/', $text)) return 3;
+    if (preg_match('/n[aã]o funciona|defeito|manuten[cç][aã]o/', $text)) return 2;
+    return 1;
+}
+
 function inviteHash(string $token): string
 {
     return hash('sha256', $token);
@@ -77,7 +86,7 @@ function snapshot(PDO $db): array
     if (!$user) return ['user' => null, 'csrf' => $_SESSION['csrf']];
     $student = $user['role'] === 'student';
     $id = (int) $user['id'];
-    $tickets = $db->prepare('SELECT id, local_id AS localId, equip_id AS equipId, titulo, descricao AS `desc`, prioridade AS prio, situacao AS st, responsavel AS resp, solicitante AS sol, aberto, concluido AS concl, servico AS serv FROM chamados' . ($student ? ' WHERE user_id = ?' : '') . ' ORDER BY id DESC');
+    $tickets = $db->prepare('SELECT id, local_id AS localId, categoria AS cat, setor, subsetor, patrimonio AS pat, titulo, descricao AS `desc`, prioridade AS prio, situacao AS st, responsavel AS resp, solicitante AS sol, aberto, concluido AS concl, servico AS serv FROM chamados' . ($student ? ' WHERE user_id = ?' : '') . ' ORDER BY id DESC');
     $tickets->execute($student ? [$id] : []);
     $c = $tickets->fetchAll(PDO::FETCH_ASSOC);
     $ticketIds = array_column($c, 'id');
@@ -102,8 +111,7 @@ function snapshot(PDO $db): array
         'user' => $user,
         'csrf' => $_SESSION['csrf'],
         'db' => [
-            'l' => $db->query('SELECT id, nome, tipo FROM locais ORDER BY nome')->fetchAll(PDO::FETCH_ASSOC),
-            'e' => $db->query('SELECT id, local_id AS localId, nome, pat FROM equipamentos ORDER BY nome')->fetchAll(PDO::FETCH_ASSOC),
+            'l' => $db->query('SELECT id, nome, tipo, parent_id AS parentId FROM locais ORDER BY nome')->fetchAll(PDO::FETCH_ASSOC),
             'c' => $c, 'a' => $a, 'k' => $k, 'i' => $invites,
         ],
     ];
@@ -183,20 +191,19 @@ try {
 
     if ($action === 'novo') {
         $local = (int) ($data['l'] ?? 0);
-        $equip = (int) ($data['e'] ?? 0);
-        $prio = (int) ($data['p'] ?? 0);
-        if (!exists($db, 'locais', $local) || $prio < 1 || $prio > 4) fail('Local ou prioridade inválidos.');
-        if ($equip) {
-            $stmt = $db->prepare('SELECT 1 FROM equipamentos WHERE id = ? AND local_id = ?');
-            $stmt->execute([$equip, $local]);
-            if (!$stmt->fetchColumn()) fail('O equipamento não pertence ao local escolhido.');
-        }
+        if (!exists($db, 'locais', $local)) fail('Local inválido.');
         $titulo = required($data, 't', 80);
         $descricao = required($data, 'd', 2000);
         $user = $_SESSION['user'];
+        $prio = automaticPriority($descricao);
+        $categoria = required($data, 'cat', 80);
+        if (!in_array($categoria, ['Elétrica', 'Hidráulica', 'Estrutural', 'Limpeza', 'Equipamentos', 'Outros'], true)) fail('Categoria inválida.');
+        $setor = field($data, 'setor', 100);
+        $subsetor = field($data, 'subsetor', 100);
+        $patrimonio = field($data, 'pat', 80);
         $db->beginTransaction();
-        $stmt = $db->prepare("INSERT INTO chamados (user_id, local_id, equip_id, titulo, descricao, prioridade, situacao, solicitante, aberto) VALUES (?, ?, ?, ?, ?, ?, 'a', ?, ?)");
-        $stmt->execute([$user['id'], $local, $equip ?: null, $titulo, $descricao, $prio, $user['name'], date('Y-m-d')]);
+        $stmt = $db->prepare("INSERT INTO chamados (user_id, local_id, categoria, setor, subsetor, patrimonio, titulo, descricao, prioridade, situacao, solicitante, aberto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'a', ?, ?)");
+        $stmt->execute([$user['id'], $local, $categoria, $setor, $subsetor, $patrimonio, $titulo, $descricao, $prio, $user['name'], date('Y-m-d')]);
         $id = (int) $db->lastInsertId();
         $stmt = $db->prepare("INSERT INTO andamentos (chamado_id, quando, situacao, observacao, autor) VALUES (?, ?, 'a', 'Chamado aberto.', ?)");
         $stmt->execute([$id, date('Y-m-d H:i:s'), $user['name']]);
@@ -253,15 +260,20 @@ try {
     if ($action === 'local') {
         $tipo = field($data, 'tipo', 50);
         if (!in_array($tipo, ['Sala de aula', 'Laboratório', 'Alojamento', 'Instalação', 'Área externa', 'Administrativo'], true)) fail('Tipo de local inválido.');
-        $stmt = $db->prepare('INSERT INTO locais (nome, tipo) VALUES (?, ?)');
-        $stmt->execute([required($data, 'nome', 100), $tipo]);
+        $parent = (int) ($data['parent'] ?? 0);
+        if ($parent && !exists($db, 'locais', $parent)) fail('Local superior inválido.');
+        if ($parent) { $stmt = $db->prepare('SELECT parent_id FROM locais WHERE id = ?'); $stmt->execute([$parent]); $grandparent = $stmt->fetchColumn(); if ($grandparent !== null) { $stmt->execute([(int) $grandparent]); if ($stmt->fetchColumn() !== null) fail('A hierarquia aceita até três níveis.'); } }
+        $stmt = $db->prepare('INSERT INTO locais (nome, tipo, parent_id) VALUES (?, ?, ?)');
+        $stmt->execute([required($data, 'nome', 100), $tipo, $parent ?: null]);
         reply(snapshot($db));
     }
-    if ($action === 'equip') {
-        $local = (int) ($data['l'] ?? 0);
-        if (!exists($db, 'locais', $local)) fail('Local inválido.');
-        $stmt = $db->prepare('INSERT INTO equipamentos (local_id, nome, pat) VALUES (?, ?, ?)');
-        $stmt->execute([$local, required($data, 'nome', 100), field($data, 'pat', 80)]);
+    if ($action === 'prioridade') {
+        admin();
+        $id = (int) ($data['id'] ?? 0);
+        $prio = (int) ($data['p'] ?? 0);
+        if ($prio < 1 || $prio > 4 || !exists($db, 'chamados', $id)) fail('Prioridade ou chamado inválido.');
+        $stmt = $db->prepare('UPDATE chamados SET prioridade = ? WHERE id = ?');
+        $stmt->execute([$prio, $id]);
         reply(snapshot($db));
     }
     fail('Ação desconhecida.', 404);
