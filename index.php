@@ -22,6 +22,6 @@
 <main id="app" class="w"></main>
 <footer class="w">Sistema de manutenção escolar · Dados de exemplo identificados como demonstração.</footer>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=20261116-2"></script>
 </body>
 </html>
